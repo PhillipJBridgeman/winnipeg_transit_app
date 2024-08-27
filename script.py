@@ -43,6 +43,7 @@ def fetch_data_with_retries(url):
     print(f"Failed to fetch data after {RETRY_COUNT} attempts.")
     return None
 
+# lat = 49.89993520529674, lon = -97.14145333888158
 # User inputs for longitude, latitude, and search radius
 lon = input("Enter the longitude: ")
 lat = input("Enter the latitude: ")
