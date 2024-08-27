@@ -45,9 +45,25 @@ def fetch_data_with_retries(url):
 
 # lat = 49.89993520529674, lon = -97.14145333888158
 # User inputs for longitude, latitude, and search radius
-lon = input("Enter the longitude: ")
-lat = input("Enter the latitude: ")
-distance = input("Enter the distance (in meters): ")
+while True:
+    try:
+        lon = float(input("Enter the longitude: "))
+        lat = float(input("Enter the latitude: "))
+        distance = int(input("Enter the distance (in meters): "))
+
+        # Validate ranges for latitude and longitude
+        if not (-180 <= lon <= 180):
+            raise ValueError("Longitude must be between -180 and 180.")
+        if not (-90 <= lat <= 90):
+            raise ValueError("Latitude must be between -90 and 90.")
+        if distance <= 0:
+            raise ValueError("Distance must be a positive number.")
+
+        break
+
+    except ValueError as e:
+        print(f"Invalid input: {e}. Please try again.")
+    
 
 # Fetch nearby bus stops
 url_stops = f"https://api.winnipegtransit.com/v3/stops.json?lon={lon}&lat={lat}&distance={distance}&api-key={API_KEY}"
