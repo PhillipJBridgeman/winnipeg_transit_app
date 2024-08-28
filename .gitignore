@@ -2,3 +2,4 @@ winnipeg_transit_app/
 __pycache__/
 *.pyc
 *.log
+venv/
