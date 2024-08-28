@@ -14,7 +14,7 @@ import logging
 import os
 from dateutil.parser import parse
 from colorama import just_fix_windows_console, Fore, Style
-from requests.exceptions import RequestException, Timeout
+from requests.exceptions import RequestException, Timeout, ConnectionError
 
 # Initialize colorama for Windows console
 just_fix_windows_console()
