@@ -5,7 +5,7 @@ import logging
 import os
 from dateutil.parser import parse
 from colorama import just_fix_windows_console, Fore, Style
-from requests.exceptions import RequestException
+from requests.exceptions import RequestException, Timeout, ConnectionError
 
 # Enable colorama for Windows terminals (if needed)
 just_fix_windows_console()
@@ -17,31 +17,31 @@ API_KEY = os.getenv('API_KEY')
 if not API_KEY:
     raise ValueError("API key not found. Please set the API_KEY in your .env file.")
 
-# Add logging configuration
-logging.basicConfig(filename='app.log', level=logging.ERROR)
+# Configure logging
+logging.basicConfig(filename='app.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 RETRY_COUNT = 3
 RETRY_DELAY = 5
 
 def fetch_data_with_retries(url):
     """Fetch data from the given URL with retries on failure."""
+    logging.info(f"Fetching data from {url}")
     for attempt in range(RETRY_COUNT):
         try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                return response
-            elif response.status_code >= 500:
-                print(f"Server error (status code: {response.status_code}). Retrying in {RETRY_DELAY} seconds...")
-                time.sleep(RETRY_DELAY)
-            else:
-                print(f"Error: {response.status_code} - {response.reason}")
-                break
-        except RequestException as e:
-            logging.error(f"Request failed: {e}")
-            print(f"Request failed. Retrying in {RETRY_DELAY} seconds...")
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            logging.info("Data fetched successfully.")
+            return response
+        except (Timeout, ConnectionError) as e:
+            logging.error(f"Network error: {e}. Retrying {attempt + 1}/{RETRY_COUNT}...")
+            print(f"Network error: {e}. Retrying in {RETRY_DELAY} seconds...")
             time.sleep(RETRY_DELAY)
+        except RequestException as e:
+            logging.error(f"Request failed with status code {response.status_code}: {e}")
+            print(f"Error: {response.status_code} - {response.reason}")
+            break
 
-    print(f"Failed to fetch data after {RETRY_COUNT} attempts.")
+    logging.error(f"Failed to fetch data after {RETRY_COUNT} attempts.")
     return None
 
 def user_input():
@@ -59,9 +59,11 @@ def user_input():
             if distance <= 0:
                 raise ValueError("Distance must be a positive number.")
 
+            logging.info(f"User input received: lon={lon}, lat={lat}, distance={distance}")
             return lon, lat, distance
 
         except ValueError as e:
+            logging.warning(f"Invalid input: {e}")
             print(f"Invalid input: {e}. Please try again.")
 
 def get_bus_stops(lon, lat, distance, api_key):
@@ -72,14 +74,18 @@ def get_bus_stops(lon, lat, distance, api_key):
 def parse_bus_stops(response):
     """Parse bus stops from the API response."""
     try:
-        return response.json().get('stops', [])
-    except requests.exceptions.JSONDecodeError:
+        resp_stops = response.json()
+        logging.info("Bus stops parsed successfully.")
+        return resp_stops.get('stops', [])
+    except requests.exceptions.JSONDecodeError as e:
+        logging.error(f"Failed to parse bus stops response: {e}")
         print("Failed to parse the response as JSON.")
         return []
 
 def select_bus_stop(stops):
     """Let the user select a bus stop from the list."""
     if not stops:
+        logging.info("No bus stops found.")
         print("No bus stops found in the specified radius.")
         return None
 
@@ -90,12 +96,14 @@ def select_bus_stop(stops):
     try:
         choice = int(input("Select a bus stop by number: ")) - 1
         if 0 <= choice < len(stops):
+            logging.info(f"Bus stop selected: {stops[choice]}")
             return stops[choice]
-    except ValueError:
-        pass
-
-    print("Invalid selection.")
-    return None
+        else:
+            raise ValueError("Selection out of range.")
+    except (ValueError, IndexError) as e:
+        logging.warning(f"Invalid selection: {e}")
+        print("Invalid selection.")
+        return None
 
 def fetch_and_parse_schedule(stop_id, api_key):
     """Fetch and parse the bus schedule for a selected stop."""
@@ -104,11 +112,15 @@ def fetch_and_parse_schedule(stop_id, api_key):
 
     if response_schedule:
         try:
-            return response_schedule.json().get('stop-schedule', {}).get('route-schedules', [])
-        except requests.exceptions.JSONDecodeError:
+            schedules = response_schedule.json().get('stop-schedule', {}).get('route-schedules', [])
+            logging.info(f"Schedule fetched and parsed successfully for stop ID: {stop_id}")
+            return schedules
+        except requests.exceptions.JSONDecodeError as e:
+            logging.error(f"Failed to parse the schedule response: {e}")
             print("Failed to parse the schedule response as JSON.")
             return []
     else:
+        logging.error(f"Failed to fetch schedule for stop ID: {stop_id}")
         return []
 
 def display_schedule(stop_name, schedules):
@@ -116,24 +128,30 @@ def display_schedule(stop_name, schedules):
     print(f"Bus schedules for {stop_name}:")
     for route in schedules:
         for schedule in route['scheduled-stops']:
-            scheduled_time = parse(schedule['times']['arrival']['scheduled'])
-            estimated_time = parse(schedule['times']['arrival']['estimated'])
+            try:
+                scheduled_time = parse(schedule['times']['arrival']['scheduled'])
+                estimated_time = parse(schedule['times']['arrival']['estimated'])
 
-            if estimated_time > scheduled_time:
-                color = Fore.RED  # Late
-            elif estimated_time < scheduled_time:
-                color = Fore.BLUE  # Early
-            else:
-                color = Fore.GREEN  # On time
+                if estimated_time > scheduled_time:
+                    color = Fore.RED  # Late
+                elif estimated_time < scheduled_time:
+                    color = Fore.BLUE  # Early
+                else:
+                    color = Fore.GREEN  # On time
 
-            print(
-                color
-                + f"Route: {route['route']['number']} | Scheduled: {scheduled_time.strftime('%H:%M:%S')} | Estimated: {estimated_time.strftime('%H:%M:%S')}"
-            )
-            print(Style.RESET_ALL)
+                print(
+                    color
+                    + f"Route: {route['route']['number']} | Scheduled: {scheduled_time.strftime('%H:%M:%S')} | Estimated: {estimated_time.strftime('%H:%M:%S')}"
+                )
+            except KeyError as e:
+                logging.error(f"Missing expected data in schedule: {e}")
+                print("Unexpected data format in schedule.")
+            finally:
+                print(Style.RESET_ALL)
 
 # Main Program Flow
 def main():
+    logging.info("Program started.")
     lon, lat, distance = user_input()
 
     response = get_bus_stops(lon, lat, distance, API_KEY)
@@ -157,6 +175,11 @@ def main():
         return
 
     display_schedule(selected_stop['name'], schedules)
+    logging.info("Program completed successfully.")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        logging.critical(f"Unexpected error: {e}", exc_info=True)
+        print("An unexpected error occurred. Please check the log for details.")
