@@ -23,6 +23,15 @@ class TestTransitScheduleFetcher(unittest.TestCase):
         url = "https://api.winnipegtransit.com/v3/stops.json?lon=-97.14139783589398&lat=-97.14139783589398&distance=100&api-key=INVALID_API_KEY"
         response = tsf.fetch_data_with_retries(url)
         self.assertIsNone(response)
+    
+    def test_get_bus_stops(self):
+        api_key = 'a5kXO9s820vtKmybA8AJ'
+        tsf = TransitScheduleFetcher(api_key)
+        lon = -97.14139783589398
+        lat = 49.29578430175781
+        distance = 100
+        response = tsf.get_bus_stops(lon, lat, distance)
+        self.assertIsNotNone(response)
 
 if __name__ == '__main__':
     unittest.main()
