@@ -109,8 +109,7 @@ class TransitScheduleFetcher:
     def get_bus_stops(self, lon, lat, distance):
         """Fetch bus stops based on longitude, latitude, and distance."""
         url_stops = (
-            f"https://api.winnipegtransit.com/v3/stops.json?"
-            f"lon={lon}&lat={lat}&distance={distance}&api-key={self.api_key}"
+            f"https://api.winnipegtransit.com/v3/stops.json?lon={lon}&lat={lat}&distance={distance}&api-key={self.api_key}"
         )
         return self.fetch_data_with_retries(url_stops)
 
